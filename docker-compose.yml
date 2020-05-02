@@ -1,0 +1,39 @@
+version: '3.7'
+services:
+  nginx:
+    container_name: nginx
+    image: nginx:stable-alpine
+    volumes:
+      - ./nginx-server.template:/etc/nginx/conf.d/default.template
+      - ./letsencrypt:/etc/letsencrypt:ro
+    environment:
+      - MINIO_DOMAIN
+    ports:
+      - "$EXTERNAL_HTTP_PORT:80"
+      - "$EXTERNAL_HTTPS_PORT:443"
+    command: /bin/sh -c "envsubst '$$MINIO_DOMAIN' < /etc/nginx/conf.d/default.template > /etc/nginx/conf.d/default.conf && exec nginx -g 'daemon off;'"
+
+  certbot:
+    container_name: certbot
+    build: ./certbot
+    volumes:
+      - ./letsencrypt:/etc/letsencrypt
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - MINIO_DOMAIN
+      - CERTBOT_EMAIL
+      - CLOUDFLARE_EMAIL
+      - CLOUDFLARE_API_KEY
+      - CLOUDFLARE_API_TOKEN
+    entrypoint: /bin/sh -c "trap exit TERM; while :; do /bin/bash /run.sh; sleep 12h & wait $${!}; done;"
+
+  minio:
+    container_name: minio
+    image: minio/minio
+    environment:
+      - MINIO_DOMAIN
+      - MINIO_ACCESS_KEY
+      - MINIO_SECRET_KEY
+    expose:
+      - "9000"
+    command: gateway b2
